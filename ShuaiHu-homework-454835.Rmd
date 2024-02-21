@@ -1,0 +1,250 @@
+---
+title: "ShuaiHu-homwork-454835"
+author: "Shuai Hu"
+date: "2024"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      toc_collapsed: true
+    toc_depth: 5
+    number_sections: false
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective of the project
+
+The main purpose of this project is to implement a Monte Carlo approximation of the theoretical pricing of European strike-out call options by creating an Rcpp package. Those let me consolidate my knowledge about Rcpp package creation, Monte Carlo simulation, and financial knowledge about options.
+ 
+## Assumptions
+
+1. The more Monte Carlo simulations are performed, the more stable the results will be.
+
+2. The time to maturity goes up, the theoretic price will go up.
+
+3. When the barrier is lower than the strike price, there is always a chance that the option will become 0.
+
+
+```{r }
+library(tidyverse)
+#install.packages("packages/optionPricer2_1.0.tar.gz",
+                 #type = "source",
+                 #repos = NULL)
+```
+## Destription of the option to be priced and its characteristics.
+
+
+strike price K = 150,
+price of the underyling at the moment of option pricing: S0 = 140,
+annualized volatility rate σ = 0.24
+annualized risk-free rate r = 0.07
+time to maturity t = 0.75
+the 7th element is barrier
+the 8th element is Monte Carlo repetitions
+let us but 155 to the barrier which is higher than 150, then barrier will not Influence the answer.
+
+
+Let us try if the RCpp package works well when barrier is 155(higher than strike price ) and barrier is 141(lower than strike price )
+```{r }
+optionPricer2::getArithmeticEurCallPrice(126, 150, 140, 0.24, 0.07, 0.75,155, 1000)
+```
+
+```{r }
+optionPricer2::getArithmeticEurCallPrice(126, 150, 140, 0.24, 0.07, 0.75,141, 1000)
+```
+The answers shows that the package works fine.
+
+### Assumption 1:
+
+```{r }
+resulat_10 <- numeric(40)
+resulat_100 <- numeric(40)
+resulat_1000 <- numeric(40)
+resulat_10000 <- numeric(40)
+
+```
+
+```{r }
+set.seed(999)
+for(i in 1:40){
+  
+  resulat_10[i] <- optionPricer2::getArithmeticEurCallPrice(i, 150, 140, 0.24, 0.07, 0.75, 155, 10)
+  
+}
+variance_10 <- var(resulat_10)
+print(paste("Variance of Monte Carlo simulation results repeated 10 times：", variance_10))
+```
+
+```{r }
+set.seed(999)
+for(i in 1:40){
+  
+  resulat_100[i] <- optionPricer2::getArithmeticEurCallPrice(i, 150, 140, 0.24, 0.07, 0.75, 155, 100)
+  
+}
+variance_100 <- var(resulat_100)
+print(paste("Variance of Monte Carlo simulation results repeated 100 times：", variance_100))
+```
+
+```{r }
+set.seed(999)
+for(i in 1:40){
+  
+  resulat_1000[i] <- optionPricer2::getArithmeticEurCallPrice(i, 150, 140, 0.24, 0.07, 0.75, 155, 1000)
+  
+}
+variance_1000 <- var(resulat_1000)
+print(paste("Variance of Monte Carlo simulation results repeated 1000 times：", variance_1000))
+```
+
+```{r }
+set.seed(999)
+for(i in 1:40){
+  
+  resulat_10000[i] <- optionPricer2::getArithmeticEurCallPrice(i, 150, 140, 0.24, 0.07, 0.75, 155, 10000)
+  
+}
+variance_10000 <- var(resulat_10000)
+print(paste("Variance of Monte Carlo simulation results repeated 10000 times：", variance_10000))
+```
+
+We can see and compare those 4 answers that when Monte Carlo simulation repute more time, the variance will be less, so it means the answer of Monte Carlo simulation will be more precise when Monte Carlo simulation repute more time. The assumption 1 is correct.
+
+
+### Assumption 2 & 3:
+
+
+
+
+ Build a function that can change expiry and barriers.
+
+```{r }
+
+getMCEurCallPriceWithExpiry <- function (expiry, barriers) {
+  return(
+    optionPricer2::getArithmeticEurCallPrice(126, 150, 140, 0.24, 0.07, expiry, barriers, 1000)
+  )
+}
+
+```
+
+
+Assign values to expiry and barriers
+
+```{r }
+
+expiry <- seq(0.01, 1, by = 0.01)
+barriers <- seq(140, 160, by = 0.5)
+
+
+```
+
+
+```{r }
+# Create a data frame with all combinations of expiry and barriers
+parameter_combinations <- expand.grid(expiry = expiry, barriers = barriers)
+
+# Use apply to calculate prices for each combination
+prices <- apply(parameter_combinations, 1, function(row) {
+  getMCEurCallPriceWithExpiry(row["expiry"], row["barriers"])
+})
+```
+
+## Information about the results of the simulation.
+
+
+### Theoretic price of Arithmetic European Call Option vs. Time to Maturity.
+
+```{r }
+# Create a tibble with 'expiry' and 'prices'
+result_tibble <- tibble(expiry = parameter_combinations$expiry, prices = prices)
+
+# Plot using ggplot2
+result_tibble %>%
+  ggplot(aes(expiry, prices)) +
+  geom_point(col = "red") +
+  labs(
+    x = "time to maturity",
+    y = "option price",
+    title = "Price of Arithmetic European Call Option vs. Time to Maturity"
+   
+  )
+
+```
+
+We can see that when the time to maturity goes up, the theoretic price will go up as well if there is no barrier.
+
+### Theoretic price of Arithmetic European Call Option vs. barriers.
+
+```{r }
+result_tibble <- tibble(barriers = parameter_combinations$barriers, prices = prices)
+
+
+result_tibble %>%
+  ggplot(aes(barriers, prices)) +
+  geom_point(col = "red") +
+  labs(
+    x = "barriers",
+    y = "option price",
+    title = "Price of Arithmetic European Call Option vs. barriers"
+  )
+
+```
+
+We can see that there is always chance that option price become 0 if barrier is under the strike price.
+
+### Heatmap of Arithmetic European Call Option theoretic price with time to Maturity and barriers.
+
+```{r }
+
+result_tibble1 <- tibble(barriers = parameter_combinations$barriers, expiry = parameter_combinations$expiry,prices = prices)
+
+result_tibble1 %>%
+  ggplot(aes(x = barriers, y = expiry, fill = prices)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+    x = "Barriers",
+    y = "Time to Maturity",
+    title = "Heatmap of Arithmetic European Call Option Prices"
+  )
+
+
+```
+
+As the result shows from this heatmap, when the strike price is below the barrier, the longer the time, the greater the theoretic price. So assumption 2 is correct too.
+
+
+```{r }
+
+```
+
+
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+```{r }
+
+```
+
+
+
+
